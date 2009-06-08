@@ -518,19 +518,45 @@ class HLDS(SRCDS):
     def close(self):
         self.disconnect()
 
+def split_hostport(address, default_port):
+    addr = address.split(":")
+    host = addr[0]
+    # check the address and store the port if it exists and is a number
+    if len(addr) > 1 and re.match("^\d+$", addr[1]):
+        port = int(addr[1])
+    else:
+        port = default_port
+
+    return host,port
 
 if __name__ == "__main__":
-    parser = OptionParser(usage="SRCDS.py -a ADDR -p RCONPASS [command]")
-    parser.add_option("-p",dest="rcon",default="",help="Specifies the rcon password")
-    parser.add_option("-a",dest="addr",default="",help="Specifies the address of the server to connect to")
+    parser = OptionParser(usage="%prog host[:port] [options]")
+    parser.add_option("--host",dest="host",help="Specifies the hostname to connect to")
+    parser.add_option("--port",dest="port",type="int",default="27015",help="Specifies the port - this is ignored if the port specified in the address")
+    parser.add_option("--rcon",dest="rcon",default="",help="Specifies the rcon password")
+    parser.add_option("-t","--timeout",dest="timeout",type="int",default="10",help="Specifies the rcon password")
     (options,args) = parser.parse_args()
 
-    if not options.addr:
-        os.system(sys.argv[0] + " -h")
-        sys.exit(1)
-        
-    print("Connecting to %s with rcon password of %s" % (options.addr,options.rcon))
-    s = SRCDS(options.addr,rconpass=options.rcon)
+    #parse positional arguments
+    if len(args) > 0:
+        options.host,options.port = split_hostport(args[0], options.port)
+
+    #requirements for the app to run not met, show usage
+    if not options.host:
+        parser.parse_args(['-h'])
+
+    print("Connecting to %s:%s" % (options.host,options.port))
+    if options.rcon:
+        print("\twith rcon password of %s" % ("*" * len(options.rcon)))
+
+    s = SRCDS(options.host,options.port,rconpass=options.rcon,timeout=options.timeout)
+
+    if not options.rcon:
+        details = s.details()
+        key_len = max([len(key) for key in details])
+        for key in details:
+            print key + ' ' * (key_len - len(key))+":", details[key]
+        exit(0)
 
     if not args:
         # run testing procedures
