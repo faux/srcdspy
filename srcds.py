@@ -3,15 +3,15 @@
 #Half-Life 2 and Half-Life Dedicated Server Interface for Python
 #Released under the LGPL (http://www.gnu.org/licenses/lgpl.html)
 #
-#Christopher Munn
 #Based off (most code copied from) SRCDS.py by Sean C. Steeg
 #
 
-__author__ = 'Christopher Munn'
+__author__ = 'faux@fauxsoft.com'
 __license__ = 'http://www.gnu.org/licenses/lgpl.html'
-__date__ = '07 Mar 2006'
-__version__ = '2.02'
-__credits__ = """Sean C. Steeg for SRCDS.py 1.01.
+__date__ = '08 June 2009'
+__version__ = 'faux_1.0.06082009'
+__credits__ = """Christopher Munn for SRCDS.py 2.02.
+                 Sean C. Steeg for SRCDS.py 1.01.
                  Bryan Gerber, for the original HLDS.py.
                  The players and staff of TacticalGamer.com, who make us want to do stuff like this.
               """
