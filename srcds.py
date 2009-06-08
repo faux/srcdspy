@@ -412,13 +412,15 @@ This assembles mult-packet responses and returns the raw response (sans the four
         detaildict['game_description'], data = read_string(data)
         aid1, data = read_byte(data)
         aid2, data = read_byte(data)
-        detaildict['app_id'] = (aid1 * 0x100) + aid2
+        detaildict['app_id'] = (aid2 * 0x100) + aid1
         detaildict['current_playercount'], data = read_byte(data)
         detaildict['max_players'], data = read_byte(data)
         detaildict['current_botcount'], data = read_byte(data)
         ded, data = read_char(data)
         if ded == 'd':
             detaildict['server_type'] = 'Dedicated'
+        elif ded == 'p':
+            detaildict['server_type'] = 'SourceTV'
         else:
             detaildict['server_type'] = 'Listen'
         os, data = read_char(data)
@@ -430,7 +432,7 @@ This assembles mult-packet responses and returns the raw response (sans the four
         detaildict['passworded'] = bool(int(pworded))
         secured, data = read_byte(data)
         detaildict['secure'] = bool(int(secured))
-        detaildict['exe_version'], data = read_string(data)
+        detaildict['game_version'], data = read_string(data)
         
         return detaildict
 
