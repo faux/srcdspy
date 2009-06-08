@@ -433,7 +433,25 @@ This assembles mult-packet responses and returns the raw response (sans the four
         secured, data = read_byte(data)
         detaildict['secure'] = bool(int(secured))
         detaildict['game_version'], data = read_string(data)
-        
+        # if there is data left over parse the Extra Data Flag (EDF)
+        # if ( EDF & 0x80 )   short             The server's game port # is included
+        # if ( EDF & 0x40 )   short string      The spectator port # and then the spectator server name are included
+        # if ( EDF & 0x20 )   string            The game tag data string for the server is included [future use]
+        if len(data) != 0:
+            edf, data = read_byte(data)
+            detaildict['edf'] = edf
+            if edf & 0x80 != 0:
+                aid1, data = read_byte(data)
+                aid2, data = read_byte(data)
+                detaildict['server_port'] = (aid2 * 0x100) + aid1
+            if edf & 0x40 != 0:
+                aid1, data = read_byte(data)
+                aid2, data = read_byte(data)
+                detaildict['spec_port'] = (aid2 * 0x100) + aid1
+                detaildict['spec_name'], data = read_string(data)
+            if edf & 0x20 != 0:
+                detaildict['server_tags'], data = read_string(data)
+
         return detaildict
 
     def _details_hl1(self, data):
