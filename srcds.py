@@ -550,6 +550,77 @@ def split_hostport(address, default_port):
 
     return host,port
 
+def format_time(t):
+    return ':'.join([str(x) for x in [t/3600, t/60 % 60, t % 60]])
+
+
+def format_str(s, width=None, justify='left'):
+    value = s
+    if width == None:
+        width = len(s)
+    if justify == 'left':
+        value = s + ' ' * (width - len(s))
+    elif justify == 'right':
+        value = ' ' * (width - len(s)) + s
+    return value
+
+
+def display(obj):
+    """displays python objects in a user-friendly manner. this means the printed result should be
+       easily passed to grep/awk for further processing."""
+    if isinstance(obj, dict):
+        key_len = max([len(key) for key in obj])
+        for key in obj:
+            print key + ' ' * (key_len - len(key))+":", obj[key]
+        print
+    elif isinstance(obj, list):
+        objs = obj
+        mode = None
+        collect = []
+        defered = []
+        for obj in objs:
+            #keep track of type of objects we are printing. if they are of a differnt type, delay printing until later.
+            if mode == None:
+                mode = type(obj)
+            elif mode != type(obj):
+                defered.append(obj)
+                continue
+
+            collect.append(obj)
+
+            if mode == dict:
+                if not 'key_length' in locals().keys():
+                    key_length = {}
+                #find the default column size needed to display the keys
+                for key in obj:
+                    if not key in key_length:
+                        key_length[key] = len(str(key)) 
+                    length = len(repr(obj[key]))
+                    if length > key_length[key]:
+                        key_length[key] = length
+
+        #we have to run through the list twice. this time we will print to the screen
+        if mode == dict:
+            for key in key_length:
+                print format_str(key, key_length[key]),
+            print
+
+            for obj in collect:
+                for key in key_length:
+                    if key in obj:
+                        value = repr(obj[key])
+                    else:
+                        value = ""
+                    print format_str(value, key_length[key]),
+                print
+            print
+        else:
+            objs = [{'index': i, 'value': v} for i,v in enumerate(collect)]
+            display(objs)
+
+        if len(defered):
+            display(defered)
+
 if __name__ == "__main__":
     parser = OptionParser(usage="%prog host[:port] [options]")
     parser.add_option("--host",dest="host",help="Specifies the hostname to connect to")
@@ -574,9 +645,12 @@ if __name__ == "__main__":
 
     if not options.rcon:
         details = s.details()
-        key_len = max([len(key) for key in details])
-        for key in details:
-            print key + ' ' * (key_len - len(key))+":", details[key]
+        players = s.players()
+
+        #pretty display the results of these queries
+        display(details)
+        display(players)
+       
         exit(0)
 
     if not args:
