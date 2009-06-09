@@ -574,6 +574,8 @@ def display(obj):
             print key + ' ' * (key_len - len(key))+":", obj[key]
         print
     elif isinstance(obj, list):
+        if len(obj) == 0:
+            return
         objs = obj
         mode = None
         collect = []
@@ -618,8 +620,7 @@ def display(obj):
             objs = [{'index': i, 'value': v} for i,v in enumerate(collect)]
             display(objs)
 
-        if len(defered):
-            display(defered)
+        display(defered)
 
 if __name__ == "__main__":
     parser = OptionParser(usage="%prog host[:port] [options]")
