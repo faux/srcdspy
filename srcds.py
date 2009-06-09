@@ -95,6 +95,12 @@ def read_int(data):
 def read_float(data):
     ret = hldsunpack_float(data[0:4])
     return (ret, data[4:])
+
+def read_short(data):
+    aid1, data = read_byte(data)
+    aid2, data = read_byte(data)
+    return ((aid2 * 0x100) + aid1, data)
+    
     
 ##################################################
 # Exceptions
@@ -410,9 +416,7 @@ This assembles mult-packet responses and returns the raw response (sans the four
         detaildict['current_map'], data = read_string(data)
         detaildict['game_directory'], data = read_string(data)
         detaildict['game_description'], data = read_string(data)
-        aid1, data = read_byte(data)
-        aid2, data = read_byte(data)
-        detaildict['app_id'] = (aid2 * 0x100) + aid1
+        detaildict['app_id'], data = read_short(data)
         detaildict['current_playercount'], data = read_byte(data)
         detaildict['max_players'], data = read_byte(data)
         detaildict['current_botcount'], data = read_byte(data)
@@ -441,13 +445,9 @@ This assembles mult-packet responses and returns the raw response (sans the four
             edf, data = read_byte(data)
             detaildict['edf'] = edf
             if edf & 0x80 != 0:
-                aid1, data = read_byte(data)
-                aid2, data = read_byte(data)
-                detaildict['server_port'] = (aid2 * 0x100) + aid1
+                detaildict['server_port'], data = read_short(data)
             if edf & 0x40 != 0:
-                aid1, data = read_byte(data)
-                aid2, data = read_byte(data)
-                detaildict['spec_port'] = (aid2 * 0x100) + aid1
+                detaildict['spec_port'], data = read_short(data)
                 detaildict['spec_name'], data = read_string(data)
             if edf & 0x20 != 0:
                 detaildict['server_tags'], data = read_string(data)
@@ -539,6 +539,7 @@ class HLDS(SRCDS):
         self.disconnect()
 
 def split_hostport(address, default_port):
+    """splits an address into HOST:PORT parts. default_port will be used if PORT is not a valid port."""
     addr = address.split(":")
     host = addr[0]
     # check the address and store the port if it exists and is a number
