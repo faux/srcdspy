@@ -365,6 +365,32 @@ No parsing is done by this function.
 
         return (info,players)
 
+    def _recv_splitpacket(self, data=None):
+        """receives and parses split packet"""
+        if not data:
+            data = self.udpsock.recv(4096)
+        packet = {}
+        #this header differs based on the server we are querying.
+        #the datatypes differ if it is a goldsource/source server
+        #for simplicity we are going to just do source first
+        #then in the future fix goldsource servers
+        packet['type'], data = read_int(data)
+        packet['request_id'], data = read_int(data)
+
+        #goldsource packet info
+        packet['gs_packet_num'], discard = read_byte(data)
+        packet['gs_packet_index'] = (packet['gs_packet_num'] & 0xF0) >> 4
+        packet['gs_packet_count'] = packet['gs_packet_num'] & 0x0F
+
+        packet['s_packet_num'], data = read_short(data)
+        packet['index'] = (packet['s_packet_num'] & 0xFF00) >> 8
+        packet['count'] = packet['s_packet_num'] & 0x00FF
+
+        packet['split_size'], data = read_short(data)
+        packet['data'] = data
+
+        return packet
+
     ##################################################
     # Query packet functions
     def _any_response(self, query):
@@ -372,19 +398,34 @@ No parsing is done by this function.
 This assembles mult-packet responses and returns the raw response (sans the four \xFF's).  No parsing is done by this function.
         """
         self.udpsock.send('\xFF\xFF\xFF\xFF' + query)
-        data = self.udpsock.recv(4096)
-        if data[0] == '\xFE':
-            num_packets = ord(data[8]) & 15
-            packets = [' ' for i in range(num_packets)]
-            for i in range(num_packets):
-                if i != 0:
-                    data = self.udpsock.recv(4096)
-                index = ord(data[8]) >> 4
-                packets[index] = data[9:]
-            data = ''
-            for i, packet in enumerate(packets):
-                data = data + packet
-        return data[4:]
+        raw_data = self.udpsock.recv(4096)
+        type, data = read_int(raw_data)
+        #the data is split. it gets a bit hairy here.
+        if type == -2:
+            #TODO:  We are ignoring two parts of the spec here.
+            #       Mostly because I haven't run into this yet.
+            #   1:  Incoming packets should be grouped by request_id.
+            #       This would cause a problem in an instance
+            #       where we had more than one request coming
+            #       in at a time.
+            #
+            #   2:  The source engine can bzip2 packets before
+            #       they are split. This needs to be taken into
+            #       account. 
+            packet = self._recv_splitpacket(raw_data)
+            buffer = [packet]
+            buffer_size = packet['count']
+            while len(buffer) < buffer_size:
+                packet = self._recv_splitpacket()
+                buffer.append(packet)
+
+            #sort packets by index 
+            buffer.sort(lambda x, y: cmp(x['index'], y['index']))
+            #rejoin the packet
+            data = ''.join([packet['data'] for packet in buffer])
+            #strip off the type
+            type, data = read_int(data)
+        return data
         
     ##################################################
     # Queries
@@ -553,7 +594,6 @@ def split_hostport(address, default_port):
 def format_time(t):
     return ':'.join([str(x) for x in [t/3600, t/60 % 60, t % 60]])
 
-
 def format_str(s, width=None, justify='left'):
     value = s
     if width == None:
@@ -563,7 +603,6 @@ def format_str(s, width=None, justify='left'):
     elif justify == 'right':
         value = ' ' * (width - len(s)) + s
     return value
-
 
 def display(obj):
     """displays python objects in a user-friendly manner. this means the printed result should be
@@ -624,10 +663,15 @@ def display(obj):
 
 if __name__ == "__main__":
     parser = OptionParser(usage="%prog host[:port] [options]")
+    parser.set_defaults(details=True)
     parser.add_option("--host",dest="host",help="Specifies the hostname to connect to")
     parser.add_option("--port",dest="port",type="int",default="27015",help="Specifies the port - this is ignored if the port specified in the address")
     parser.add_option("--rcon",dest="rcon",default="",help="Specifies the rcon password")
-    parser.add_option("-t","--timeout",dest="timeout",type="int",default="10",help="Specifies the rcon password")
+    parser.add_option("-t","--timeout",dest="timeout",type="int",default="10",help="Specifies the socket timeout")
+    parser.add_option("-d", action="store_true", dest="details", help="Displays the server details (default: true)")
+    parser.add_option("--no-details", action="store_false", dest="details", help="Hides the server details")
+    parser.add_option("-p", action="store_true", dest="players", default=False, help="Displays a list of players connected to the server")
+    parser.add_option("-r", action="store_true", dest="rules", default=False, help="Displays the server rules")
     (options,args) = parser.parse_args()
 
     #parse positional arguments
@@ -645,16 +689,19 @@ if __name__ == "__main__":
     s = SRCDS(options.host,options.port,rconpass=options.rcon,timeout=options.timeout)
 
     if not options.rcon:
-        details = s.details()
-        players = s.players()
+        if options.details:
+            details = s.details()
+            display(details)
 
-        #pretty display the results of these queries
-        display(details)
-        display(players)
+        if options.players:
+            players = s.players()
+            display(players)
+
+        if options.rules:
+            rules = s.rules()
+            display(rules)
        
-        exit(0)
-
-    if not args:
+    elif not args:
         # run testing procedures
         print("*"*66)
         print("Testing module...")
