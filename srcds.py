@@ -571,7 +571,7 @@ def display(obj):
     if isinstance(obj, dict):
         key_len = max([len(key) for key in obj])
         for key in obj:
-            print key + ' ' * (key_len - len(key))+":", obj[key]
+            print key + ' ' * (key_len - len(key))+":", repr(obj[key])
         print
     elif isinstance(obj, list):
         if len(obj) == 0:
