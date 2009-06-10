@@ -9,7 +9,7 @@
 __author__ = 'faux@fauxsoft.com'
 __license__ = 'http://www.gnu.org/licenses/lgpl.html'
 __date__ = '08 June 2009'
-__version__ = 'faux_1.0.06082009'
+__version__ = 'faux_1.1.07'
 __credits__ = """Christopher Munn for SRCDS.py 2.02.
                  Sean C. Steeg for SRCDS.py 1.01.
                  Bryan Gerber, for the original HLDS.py.
