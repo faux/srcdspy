@@ -17,6 +17,7 @@ __credits__ = """Christopher Munn for SRCDS.py 2.02.
               """
 
 import socket, re, xdrlib, string, sys, os
+import time
 from optparse import OptionParser
 
 #Server Query Constants
@@ -29,6 +30,8 @@ PLAYERS = 'U'
 PLAYERS_RESP = 'D'
 RULES = 'V'
 RULES_RESP = 'E'
+PING = 'i'
+PING_RESP = 'j'
 #HL2 RCON Constants
 SERVERDATA_RESPONSE_VALUE = 0
 SERVERDATA_AUTH_RESPONSE = 2
@@ -123,6 +126,7 @@ Note: timeout is in seconds. host may be ip or hostname
     """
 
     def __init__(self, host, port=27015, rconpass='', timeout=10.0):
+        self.host = host
         self.ip, self.port, self.rconpass, self.timeout = socket.gethostbyname(host), port, rconpass, timeout
         self.udpsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -393,10 +397,11 @@ No parsing is done by this function.
 
     ##################################################
     # Query packet functions
-    def _any_response(self, query):
+    def _any_response(self, query, raw=False):
         """
 This assembles mult-packet responses and returns the raw response (sans the four \xFF's).  No parsing is done by this function.
-        """
+raw=True:   This will return a tuple (data, raw_data) where raw_data is the raw response (WITH the four \xFF's).
+"""
         self.udpsock.send('\xFF\xFF\xFF\xFF' + query)
         raw_data = self.udpsock.recv(4096)
         type, data = read_int(raw_data)
@@ -425,7 +430,7 @@ This assembles mult-packet responses and returns the raw response (sans the four
             data = ''.join([packet['data'] for packet in buffer])
             #strip off the type
             type, data = read_int(data)
-        return data
+        return data if not raw else (data,raw_data)
         
     ##################################################
     # Queries
@@ -436,6 +441,20 @@ This assembles mult-packet responses and returns the raw response (sans the four
         data = raw_challenge[1:]
         self.challenge, data = read_int(data)
         return self.challenge
+
+    def ping(self):
+        t = time.time()
+        raw_ping, raw_packet = self._any_response(PING, raw=True)
+        if raw_ping[0] == PING_RESP:
+            t = (time.time() - t) * 1000
+            ping_resp = {'time': t}
+            packet_type, data = (read_byte(raw_ping))
+            ping_resp['type'] = chr(packet_type)
+            ping_resp['content'], data = read_string(data)
+            ping_resp['size'] = len(raw_packet)
+            return ping_resp
+        else:
+            raise SRCDS_Error, 'Ping Error: Unknown response type %s' % repr(raw_ping)
     
     def details(self):
         raw_details = self._any_response(DETAILS)
@@ -604,6 +623,69 @@ def format_str(s, width=None, justify='left'):
         value = ' ' * (width - len(s)) + s
     return value
 
+def format_exception(e, process_name=True):
+
+    process_name = os.path.basename(sys.argv[0]) + ": " if process_name else ''
+    exception_message = str(e)
+    exception_type = str(type(e)).split("'")[1]
+
+    return ''.join([
+            process_name,
+            exception_type,
+            ": ",
+            exception_message
+        ])
+
+def ping_srcds(server, num_pings=None, interval=1):
+    start = time.time()
+    packets = []
+    try:
+        print("SRCDS_PING %s (%s) on port %s" % (server.host, server.ip, server.port))
+        while(num_pings == None or num_pings > 0):
+            try:
+                ping = server.ping()
+                packets.append(ping)
+                print "%s bytes from %s:%s: type=%s content=%s time=%i ms" % (
+                    ping['size'],
+                    server.ip,
+                    server.port,
+                    ping['type'],
+                    ping['content'],
+                    ping['time'],
+                )
+
+            except socket.error as socket_error:
+                packets.append(socket_error)
+                print "%s:%s: %s" % (
+                    server.ip,
+                    server.port,
+                    format_exception(socket_error, process_name=False),
+                )
+            time.sleep(1)
+    except KeyboardInterrupt:
+        time_spent = (time.time() - start) * 1000
+        print
+        responses = [resp for resp in packets if 'time' in resp]
+        exceptions = [resp for resp in packets if isinstance(resp, Exception)]
+
+        print "--- %s ping statistics ---" % server.ip
+        print "%s packets transmitted, %s received, %s%% packet loss, time %i ms" % (
+            len(packets),
+            len(responses),
+            len(exceptions)/len(packets) * 100,
+            time_spent,
+        )
+        if len(responses):
+            times = [resp['time'] for resp in responses]
+            print "rtt min/avg/max = %0.2f/%0.2f/%0.2f ms" % (
+                min(times),
+                sum(times)/len(times),
+                max(times),
+            )
+
+        if num_pings == None:
+            sys.exit(0)
+
 def display(obj):
     """displays python objects in a user-friendly manner. this means the printed result should be
        easily passed to grep/awk for further processing."""
@@ -665,11 +747,10 @@ if __name__ == "__main__":
     parser = OptionParser(usage="%prog host[:port] [options]")
     parser.set_defaults(details=True)
     parser.add_option("--host",dest="host",help="Specifies the hostname to connect to")
-    parser.add_option("--port",dest="port",type="int",default="27015",help="Specifies the port - this is ignored if the port specified in the address")
-    parser.add_option("--rcon",dest="rcon",default="",help="Specifies the rcon password")
+    parser.add_option("--port",dest="port",type="int",default="27015",help="Specifies the port - this is ignored if the port is specified in the address")
+    parser.add_option("-P","--rcon",dest="rcon",default="",help="Specifies the rcon password")
     parser.add_option("-t","--timeout",dest="timeout",type="int",default="10",help="Specifies the socket timeout")
-    parser.add_option("-d", action="store_true", dest="details", help="Displays the server details (default: true)")
-    parser.add_option("--no-details", action="store_false", dest="details", help="Hides the server details")
+    parser.add_option("-d", action="store_true", dest="details", default=False, help="Displays the server details")
     parser.add_option("-p", action="store_true", dest="players", default=False, help="Displays a list of players connected to the server")
     parser.add_option("-r", action="store_true", dest="rules", default=False, help="Displays the server rules")
     (options,args) = parser.parse_args()
@@ -700,6 +781,9 @@ if __name__ == "__main__":
         if options.rules:
             rules = s.rules()
             display(rules)
+
+        if not (options.details or options.players or options.rules):
+            ping_srcds(s)
        
     elif not args:
         # run testing procedures
