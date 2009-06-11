@@ -636,55 +636,85 @@ def format_exception(e, process_name=True):
             exception_message
         ])
 
-def ping_srcds(server, num_pings=None, interval=1):
+def ping_srcds(server, count=None, interval=1,
+    print_response=None, # callbacks for printing
+    print_exception=None,
+):
+    """Generic ping"""
+    #capture start time
     start = time.time()
+    #keep track of all packets we receive so roundtrip times can be calculated later
     packets = []
     try:
-        print("SRCDS_PING %s (%s) on port %s" % (server.host, server.ip, server.port))
-        while(num_pings == None or num_pings > 0):
+        #loop while until the count is exhausted
+        while(count == None or count > 0):
+            if count:
+                count -= 1
             try:
+                #ping and capture packet
                 ping = server.ping()
                 packets.append(ping)
-                print "%s bytes from %s:%s: type=%s content=%s time=%i ms" % (
-                    ping['size'],
-                    server.ip,
-                    server.port,
-                    ping['type'],
-                    ping['content'],
-                    ping['time'],
-                )
-
-            except socket.error as socket_error:
-                packets.append(socket_error)
-                print "%s:%s: %s" % (
-                    server.ip,
-                    server.port,
-                    format_exception(socket_error, process_name=False),
-                )
-            time.sleep(1)
+                if print_response: print_response(ping)
+            except IOError as exception:
+                #capture the IOError
+                packets.append(exception)
+                if print_exception: print_exception(exception)
+            time.sleep(interval)
     except KeyboardInterrupt:
-        time_spent = (time.time() - start) * 1000
-        print
-        responses = [resp for resp in packets if 'time' in resp]
-        exceptions = [resp for resp in packets if isinstance(resp, Exception)]
+        pass
 
-        print "--- %s ping statistics ---" % server.ip
-        print "%s packets transmitted, %s received, %s%% packet loss, time %i ms" % (
-            len(packets),
-            len(responses),
-            len(exceptions)/len(packets) * 100,
-            time_spent,
+    total_time = (time.time() - start) * 1000
+    stats = {
+        'packets': packets,
+        'total_time': total_time
+    }
+    return stats
+
+def srcds_ping(server, count=None, interval=1):
+    def pr(response):
+        print "%i bytes from %s:%s: type=%s content=%s time=%i ms" % (
+            response['size'],
+            server.ip,
+            server.port,
+            response['type'],
+            response['content'],
+            response['time'],
         )
-        if len(responses):
-            times = [resp['time'] for resp in responses]
-            print "rtt min/avg/max = %0.2f/%0.2f/%0.2f ms" % (
-                min(times),
-                sum(times)/len(times),
-                max(times),
-            )
 
-        if num_pings == None:
-            sys.exit(0)
+    def pe(exception):
+        print "%s:%s: %s" % (
+            server.ip,
+            server.port,
+            format_exception(exception, process_name=False),
+        )
+
+    print "SRCDS_PING %s (%s) on port %s" % (server.host, server.ip, server.port)
+
+    stats = ping_srcds(server, count, interval, print_response=pr, print_exception=pe)
+
+    packets = stats['packets']
+    print
+    #responses are dictionaries with a time field
+    responses = [resp for resp in packets if 'time' in resp]
+    exceptions = [resp for resp in packets if isinstance(resp, Exception)]
+
+    print "--- %s ping statistics ---" % server.ip
+    print "%s packets transmitted, %s received, %s%% packet loss, time %i ms" % (
+        len(packets),
+        len(responses),
+        len(exceptions)/len(packets) * 100,
+        stats['total_time'],
+    )
+    if len(responses):
+        times = [resp['time'] for resp in responses]
+        print "rtt min/avg/max = %0.2f/%0.2f/%0.2f ms" % (
+            min(times),
+            sum(times)/len(times),
+            max(times),
+        )
+
+    if count == None:
+        sys.exit(0)
 
 def display(obj):
     """displays python objects in a user-friendly manner. this means the printed result should be
@@ -783,7 +813,7 @@ if __name__ == "__main__":
             display(rules)
 
         if not (options.details or options.players or options.rules):
-            ping_srcds(s)
+            srcds_ping(s)
        
     elif not args:
         # run testing procedures
