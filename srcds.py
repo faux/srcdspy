@@ -650,15 +650,16 @@ def ping_srcds(server, count=None, interval=1,
         while(count == None or count > 0):
             if count:
                 count -= 1
+            #ping and capture packet
             try:
-                #ping and capture packet
                 ping = server.ping()
-                packets.append(ping)
-                if print_response: print_response(ping)
-            except IOError as exception:
-                #capture the IOError
+            except Exception, exception:
+                #capture the Exception
                 packets.append(exception)
                 if print_exception: print_exception(exception)
+            else:
+                packets.append(ping)
+                if print_response: print_response(ping)
             time.sleep(interval)
     except KeyboardInterrupt:
         pass
