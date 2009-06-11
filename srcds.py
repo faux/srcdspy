@@ -794,9 +794,9 @@ if __name__ == "__main__":
     if not options.host:
         parser.parse_args(['-h'])
 
-    print("Connecting to %s:%s" % (options.host,options.port))
+    print "Connecting to %s:%s" % (options.host,options.port)
     if options.rcon:
-        print("\twith rcon password of %s" % ("*" * len(options.rcon)))
+        print "\twith rcon password of %s" % ("*" * len(options.rcon))
 
     s = SRCDS(options.host,options.port,rconpass=options.rcon,timeout=options.timeout)
 
@@ -818,26 +818,26 @@ if __name__ == "__main__":
        
     elif not args:
         # run testing procedures
-        print("*"*66)
-        print("Testing module...")
-        print("*"*66)
+        print "*"*66
+        print "Testing module..."
+        print "*"*66
 
         sinfo,d = s.status()
         for u in d:
-            print ("userid %d, name = %s" % (u,d[u]['name']))
+            print "userid %d, name = %s" % (u,d[u]['name'])
  
-        print("Server name    : " + sinfo['name'])
-        print("IP             : %s" % sinfo['ip'])
-        print("Port           : %s" % sinfo['port'])
-        print("FPS            : %s" % sinfo['fps'])
-        print("CPU Usage      : %s" % sinfo['cpu_usage'])
-        print("Server version : %s" % sinfo['version'])
-        print("Players present: %d" % sinfo['players'])
-        print("Number of slots: %d" % sinfo['slots'])
-        print("Map            : " + sinfo['map'])
-        print("Passworded     : " + str(sinfo['passworded']))
-        print("Secure         : " + str(sinfo['secure']))
-        print("sv_gravity     : " + s.cvar("sv_gravity"))
+        print "Server name    : " + sinfo['name']
+        print "IP             : %s" % sinfo['ip']
+        print "Port           : %s" % sinfo['port']
+        print "FPS            : %s" % sinfo['fps']
+        print "CPU Usage      : %s" % sinfo['cpu_usage']
+        print "Server version : %s" % sinfo['version']
+        print "Players present: %d" % sinfo['players']
+        print "Number of slots: %d" % sinfo['slots']
+        print "Map            : " + sinfo['map']
+        print "Passworded     : " + str(sinfo['passworded'])
+        print "Secure         : " + str(sinfo['secure'])
+        print "sv_gravity     : " + s.cvar("sv_gravity")
     else:
         # run the rcon command that the user specified
         print s.rcon_command(' '.join(args))
