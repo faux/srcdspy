@@ -32,6 +32,7 @@ RULES = 'V'
 RULES_RESP = 'E'
 PING = 'i'
 PING_RESP = 'j'
+SERVER_ERROR = 'l'
 #HL2 RCON Constants
 SERVERDATA_RESPONSE_VALUE = 0
 SERVERDATA_AUTH_RESPONSE = 2
@@ -40,6 +41,9 @@ SERVERDATA_AUTH = 3
 RCON_EMPTY_RESP = (10,0,0,'','')
 #HL1 RCON Constants
 RCON_CHALLENGE = "challenge rcon\n"
+
+#Default port to connect to
+SRCDS_DEFAULT_PORT = 27015
 
 ##################################################
 # Network data manipulation
@@ -430,6 +434,10 @@ raw=True:   This will return a tuple (data, raw_data) where raw_data is the raw 
             data = ''.join([packet['data'] for packet in buffer])
             #strip off the type
             type, data = read_int(data)
+        if data[0] == SERVER_ERROR:
+            err, data = read_byte(data)
+            err_message,data = read_string(data)
+            raise SRCDS_Error, "Server error: %s" % err_message
         return data if not raw else (data,raw_data)
         
     ##################################################
@@ -775,69 +783,55 @@ def display(obj):
         display(defered)
 
 if __name__ == "__main__":
-    parser = OptionParser(usage="%prog host[:port] [options]")
-    parser.set_defaults(details=True)
-    parser.add_option("--host",dest="host",help="Specifies the hostname to connect to")
-    parser.add_option("--port",dest="port",type="int",default="27015",help="Specifies the port - this is ignored if the port is specified in the address")
-    parser.add_option("-P","--rcon",dest="rcon",default="",help="Specifies the rcon password")
+    parser = OptionParser(usage="%prog host[:port] [command] [options]")
+    parser.add_option("-P",dest="rcon_password",default="",help="Specifies the rcon password")
     parser.add_option("-t","--timeout",dest="timeout",type="int",default="10",help="Specifies the socket timeout")
-    parser.add_option("-d", action="store_true", dest="details", default=False, help="Displays the server details")
-    parser.add_option("-p", action="store_true", dest="players", default=False, help="Displays a list of players connected to the server")
-    parser.add_option("-r", action="store_true", dest="rules", default=False, help="Displays the server rules")
+    parser.add_option("-i","--interval",dest="interval",type="int",default="1",help="Specifies the interval between pings")
+    parser.add_option("-n","--count",dest="count",type="int",help="Number of pings to send")
     (options,args) = parser.parse_args()
 
-    #parse positional arguments
-    if len(args) > 0:
-        options.host,options.port = split_hostport(args[0], options.port)
+    options.ensure_value('port', 27015)
+    options.ensure_value('rcon', "")
+    options.ensure_value('timeout', 10)
 
-    #requirements for the app to run not met, show usage
-    if not options.host:
+    avail_commands = ['all', 'info', 'players', 'rules', 'ping', 'rcon']
+
+    def show_usage():
         parser.parse_args(['-h'])
 
-    print "Connecting to %s:%s" % (options.host,options.port)
-    if options.rcon:
-        print "\twith rcon password of %s" % ("*" * len(options.rcon))
+    command = []
 
-    s = SRCDS(options.host,options.port,rconpass=options.rcon,timeout=options.timeout)
-
-    if not options.rcon:
-        if options.details:
-            details = s.details()
-            display(details)
-
-        if options.players:
-            players = s.players()
-            display(players)
-
-        if options.rules:
-            rules = s.rules()
-            display(rules)
-
-        if not (options.details or options.players or options.rules):
-            srcds_ping(s)
-       
-    elif not args:
-        # run testing procedures
-        print "*"*66
-        print "Testing module..."
-        print "*"*66
-
-        sinfo,d = s.status()
-        for u in d:
-            print "userid %d, name = %s" % (u,d[u]['name'])
- 
-        print "Server name    : " + sinfo['name']
-        print "IP             : %s" % sinfo['ip']
-        print "Port           : %s" % sinfo['port']
-        print "FPS            : %s" % sinfo['fps']
-        print "CPU Usage      : %s" % sinfo['cpu_usage']
-        print "Server version : %s" % sinfo['version']
-        print "Players present: %d" % sinfo['players']
-        print "Number of slots: %d" % sinfo['slots']
-        print "Map            : " + sinfo['map']
-        print "Passworded     : " + str(sinfo['passworded'])
-        print "Secure         : " + str(sinfo['secure'])
-        print "sv_gravity     : " + s.cvar("sv_gravity")
+    if len(args) == 0:
+        show_usage()
+    elif len(args) > 1:
+        for arg in args:
+            if arg in avail_commands:
+                command.append(arg)
     else:
-        # run the rcon command that the user specified
-        print s.rcon_command(' '.join(args))
+        command.append('info')
+
+    host, port = split_hostport(args[0], SRCDS_DEFAULT_PORT)
+    setattr(options, 'host', host)
+    setattr(options, 'port', port)
+
+    print "Connecting to %s:%s" % (options.host,options.port)
+    s = SRCDS(options.host,options.port,rconpass=options.rcon_password,timeout=options.timeout)
+
+    for cmd in command:
+        if cmd == 'info':
+            display(s.details())
+        elif cmd == 'ping':
+            srcds_ping(s, count=options.count, interval=options.interval)
+        elif cmd == 'players':
+            display(s.players())
+        elif cmd == 'rules':
+            display(s.rules())
+        elif cmd == 'rcon':
+            if len(options.rcon_password) == 0:
+                raise SRCDS_Error, "Cannot use rcon without providing an rcon_password"
+            print "using rcon_password '%s'" % ("*" * len(options.rcon_password))
+            rcon_cmds = ' '.join(args[args.index('rcon')+1:]).split(';')
+
+            for rcon_cmd in rcon_cmds:
+                print repr(rcon_cmd)
+                print s.rcon_command(rcon_cmd)
