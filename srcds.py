@@ -833,5 +833,6 @@ if __name__ == "__main__":
             rcon_cmds = ' '.join(args[args.index('rcon')+1:]).split(';')
 
             for rcon_cmd in rcon_cmds:
+                rcon_cmd = rcon_cmd.strip()
                 print repr(rcon_cmd)
                 print s.rcon_command(rcon_cmd)
