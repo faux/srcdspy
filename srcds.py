@@ -794,7 +794,7 @@ if __name__ == "__main__":
     options.ensure_value('rcon', "")
     options.ensure_value('timeout', 10)
 
-    avail_commands = ['all', 'info', 'players', 'rules', 'ping', 'rcon']
+    avail_commands = ['all', 'info', 'players', 'rules', 'ping', 'rcon', 'scan']
 
     def show_usage():
         parser.parse_args(['-h'])
@@ -814,6 +814,29 @@ if __name__ == "__main__":
     setattr(options, 'host', host)
     setattr(options, 'port', port)
 
+    if 'scan' in command:
+        from expandurl import expand_url as expand
+        #zeros in the IP will scan that entire subnet for hosts. including a range will work better
+        #r = re.compile("((\.)0(\.?)|(\.?)0(\.))")
+        #host_string = r.sub('\g<1>[1-255]\g<2>', args[0])
+        host_string = args[0]
+        hosts = expand(host_string)
+        for host_port in hosts:
+            host, port = split_hostport(host_port, SRCDS_DEFAULT_PORT)
+            s = SRCDS(host, port, timeout=0.05)
+            stats = ping_srcds(s, count=1, interval=0)
+            packets = stats['packets']
+            responses = [resp for resp in packets if 'time' in resp]
+            times = [resp['time'] for resp in responses]
+            print host_port,":",
+            if len(times):
+                for t in times:
+                    print int(t),
+                print " min/max: ",
+                print int(min(times)), int(max(times))
+            else:
+                print "no response"
+        exit(0)
     print "Connecting to %s:%s" % (options.host,options.port)
     s = SRCDS(options.host,options.port,rconpass=options.rcon_password,timeout=options.timeout)
 
